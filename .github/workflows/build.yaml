@@ -1,0 +1,53 @@
+name: Build Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to build for
+        type: string
+        required: true
+        default: main
+    
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: vllm-project/vllm
+          ref: "${{ inputs.ref }}"
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          tags: |
+            ghcr.io/southball/vllm-avx2-docker:latest
+          push: true
+          context: .
+          file: docker/Dockerfile.cpu
+          target: "vllm-openai"
+          build-args: |
+            VLLM_CPU_AVX512BF16=false
+            VLLM_CPU_AVX512VNNI=false
+            VLLM_CPU_DISABLE_AVX512=false
+
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ghcr.io/southball/vllm-avx2-docker
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
